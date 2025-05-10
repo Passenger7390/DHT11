@@ -18,10 +18,11 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-
+#include <stdio.h>
+#include <string.h>
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "DHT11.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -31,7 +32,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define DHT11_PORT GPIOA
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -43,7 +44,7 @@
 TIM_HandleTypeDef htim2;
 
 UART_HandleTypeDef huart2;
-
+DHT11_InitTypeDef dht;
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -54,7 +55,6 @@ static void MX_GPIO_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
-
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -93,15 +93,37 @@ int main(void)
   MX_GPIO_Init();
   MX_TIM2_Init();
   MX_USART2_UART_Init();
+
   /* USER CODE BEGIN 2 */
+  HAL_DHT11_Init(&dht, DHT11_PORT, DHT11_Pin, &htim2);
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  char buffer[90]; // Make sure buffer is large enough
+  int8_t temperature;
+  int8_t humidity;
+  int8_t tempF;
   while (1)
   {
     /* USER CODE END WHILE */
+    if (HAL_DHT11_ReadData(&dht) == DHT11_OK) {
+      HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
+      // Format into buffer
+      temperature = HAL_DHT11_ReadTemperature(&dht);
+      humidity = HAL_DHT11_ReadHumidity(&dht);
+      tempF = HAL_DHT11_ReadTemperatureF(&dht);
+
+      sprintf(buffer, "Temp: %d C, Hum: %d%, Temp F: %d\r\n", temperature, humidity, tempF);
+
+      // Send buffer via UART
+      HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
+    } else {
+      HAL_UART_Transmit(&huart2, (uint8_t*)"DHT11 reading error!\r\n", 22, HAL_MAX_DELAY);
+    }
+
+    HAL_Delay(500);
 
     /* USER CODE BEGIN 3 */
   }
@@ -174,9 +196,9 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 0;
+  htim2.Init.Prescaler = 72-1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 4294967295;
+  htim2.Init.Period = 0xffff;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
